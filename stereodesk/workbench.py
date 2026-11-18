@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-
+from .cutout import checkerboard_preview, separate
 from .geometry import aligned_pair, guide_overlay, map_to_source, support_rectangle
 from .imaging import (blend, cross_eye, diagnostic_preview, disparity_preview, load_image,
                       sample_report, simple_anaglyph, summary)
@@ -61,6 +61,20 @@ class Workbench:
         if mode == 'confidence':
             return diagnostic_preview(self.match(project))
         raise KeyError(mode)
+
+    @lru_cache(maxsize=2)
+    def _cutout(self, identifier, alignment_key, matching_key, x, y):
+        pair = self._pair(identifier, alignment_key)
+        result = self._match(identifier, alignment_key, matching_key)
+        return separate(pair.left, result, x, y)
+
+    def cutout(self, project, x, y):
+        settings = project['settings']
+        return self._cutout(project['id'], cache_key(settings['alignment']),
+                            cache_key(settings['matching']), x, y)
+
+    def cutout_preview(self, project, x, y):
+        return checkerboard_preview(self.cutout(project, x, y))
 
     def inspect(self, project, x, y):
         settings = project['settings']

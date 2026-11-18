@@ -96,6 +96,7 @@
           <button type="button" data-mode="cross" aria-pressed="false">交叉观看</button>
           <button type="button" data-mode="disparity" aria-pressed="false">视差</button>
           <button type="button" data-mode="confidence" aria-pressed="false">可信区</button>
+          <button type="button" data-mode="cutout" aria-pressed="false">取出纸艺</button>
         </nav>
         <div id="view" class="view"></div>
         <footer class="viewer-footer"><span id="view-note"></span><a id="export-preview" download>下载当前预览</a></footer>
@@ -115,6 +116,11 @@
           <header><h3>像素探针</h3></header>
           <div id="point-readout">点击左原片、视差图或可信区定位测量点。</div>
           <a id="export-row" class="quiet-button" download>下载当前行 CSV</a>
+        </section>
+        <section class="card readout">
+          <header><h3>取出纸艺</h3></header>
+          <div id="cutout-readout">在左图上点一下要取出的纸艺。</div>
+          <a id="export-cutout" class="quiet-button" download hidden>下载透明 PNG</a>
         </section>
       </div>
     </section>

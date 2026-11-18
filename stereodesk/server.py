@@ -13,6 +13,7 @@ from .workbench import Workbench
 
 
 PREVIEWS = {'anaglyph', 'cross', 'blend', 'left-guide', 'right-guide', 'disparity', 'confidence'}
+CUTOUT_KINDS = {'object.png', 'object-preview.png', 'cutout.json'}
 
 
 def required_file(name):
@@ -58,6 +59,18 @@ def register(app, root):
         if requested is not None and str(project['version']) != requested:
             raise Conflict('预览修订已变更，请重新打开此工程')
         return project
+
+    def point(project):
+        width, height = project['size']
+        return int_query('x', 0, width - 1), int_query('y', 0, height - 1)
+
+    def cutout_export(project, kind):
+        x, y = point(project)
+        item = desk.cutout(project, x, y)
+        if kind == 'cutout.json':
+            return jsonify({**item.report(), 'x': x, 'y': y})
+        image = item.rgba if kind == 'object.png' else desk.cutout_preview(project, x, y)
+        return response(png(image), 'image/png', f'stereodesk-object-{x}-{y}.png')
 
     @app.get('/')
     def home():
@@ -132,6 +145,12 @@ def register(app, root):
         y = int_query('y', 0, height - 1)
         return jsonify(desk.inspect(project, x, y))
 
+    @stereo.get('/projects/<identifier>/cutout')
+    def cutout_report(identifier):
+        project = current(identifier)
+        x, y = point(project)
+        return jsonify(desk.cutout(project, x, y).report())
+
     @stereo.get('/projects/<identifier>/export/<kind>')
     def export(identifier, kind):
         project = current(identifier)
@@ -152,6 +171,8 @@ def register(app, root):
             height = project['size'][1]
             y = int_query('y', 0, height - 1, height // 2)
             return response(row_csv(desk.match(project), project['settings'], y), 'text/csv', kind)
+        if kind in CUTOUT_KINDS:
+            return cutout_export(project, kind)
         if kind.endswith('.png') and kind[:-4] in PREVIEWS:
             return response(png(desk.render(project, kind[:-4])), 'image/png', kind)
         raise Invalid('无法识别此导出类型')

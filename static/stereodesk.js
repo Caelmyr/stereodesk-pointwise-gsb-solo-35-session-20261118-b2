@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-const state = { project: null, mode: 'sources', point: null, metrics: null, inspectSerial: 0 };
+const state = { project: null, mode: 'sources', point: null, metrics: null, inspectSerial: 0, cutoutSerial: 0 };
 const captions = {
   sources: '左右原片 · 点击左眼定位 · 对齐和视差处理保留原图',
   guides: '左右共用同一水平线 · 观察两眼对应结构的垂直偏移',
@@ -8,10 +8,11 @@ const captions = {
   cross: '右眼图在左侧 · 左眼图在右侧',
   disparity: '浅暖色为高视差 · 深色方格为无可靠匹配 · 点击测量',
   confidence: '绿 有效 / 灰 无支撑 / 紫 无视差 / 黄 低纹理 / 红 双向不一致',
+  cutout: '点中的纸艺已按原位分离 · 棋盘格表示透明',
 };
 const previewTitles = { blend: '叠加图', anaglyph: '红青预览', cross: '交叉观看图',
-  disparity: '视差颜色图', confidence: '视差有效性图' };
-const selectable = new Set(['sources', 'guides', 'disparity', 'confidence']);
+  disparity: '视差颜色图', confidence: '视差有效性图', cutout: '分离结果' };
+const selectable = new Set(['sources', 'guides', 'disparity', 'confidence', 'cutout']);
 const numberText = (value, unit = '') => value == null ? '—' : `${value}${unit}`;
 const percentage = value => (100 * value).toFixed(1) + '%';
 
@@ -59,7 +60,9 @@ function picture(url, caption, isSelectable) {
   image.src = url;
   image.alt = caption;
   image.addEventListener('error', () => {
-    if (figure.isConnected) message('这张预览无法生成，请检查工程设置。', true);
+    if (!figure.isConnected) return;
+    if (state.mode === 'cutout') message('这一点分不出纸艺，请在纸艺主体上再点一下。', true);
+    else message('这张预览无法生成，请检查工程设置。', true);
   });
   if (isSelectable) {
     image.tabIndex = 0;
@@ -102,12 +105,24 @@ function drawPreview() {
   }
   $('view-note').textContent = captions[mode];
   $('export-preview').hidden = mode === 'sources' || mode === 'guides';
+  $('export-preview').textContent = mode === 'cutout' ? '下载透明 PNG' : '下载当前预览';
   if (mode === 'sources') {
     view.replaceChildren(picture(projectURL('source/left.png'), '左眼 · 原片', true),
       picture(projectURL('source/right.png'), '右眼 · 原片', false));
   } else if (mode === 'guides') {
     view.replaceChildren(picture(projectURL('preview/left-guide.png'), '左眼 · 基准', true),
       picture(projectURL('preview/right-guide.png'), '右眼 · 校正', false));
+  } else if (mode === 'cutout') {
+    if (!state.point) {
+      view.replaceChildren(picture(projectURL('source/left.png'), '左眼 · 点选要取出的纸艺', true));
+      $('export-preview').hidden = true;
+      drawPointer();
+      return;
+    }
+    const { x, y } = state.point;
+    view.replaceChildren(picture(projectURL('export/object-preview.png', { x, y }),
+      '分离结果 · 棋盘格为透明 · 可再点一下换位置', true));
+    $('export-preview').href = projectURL('export/object.png', { x, y });
   } else {
     view.replaceChildren(picture(projectURL(`preview/${mode}.png`), previewTitles[mode], selectable.has(mode)));
     $('export-preview').href = projectURL(`export/${mode}.png`);
@@ -135,6 +150,44 @@ async function readPoint(x, y) {
   }
 }
 
+async function readCutout(x, y) {
+  const serial = ++state.cutoutSerial;
+  const active = state.project;
+  $('cutout-readout').textContent = '正在分离…';
+  try {
+    const search = new URLSearchParams({ v: active.version, x, y });
+    const cut = await api(`/projects/${active.id}/cutout?${search}`);
+    if (state.project !== active || state.cutoutSerial !== serial) return;
+    fillDefinitions($('cutout-readout'), [
+      ['取景框', cut.box.join(', ')],
+      ['视差层', numberText(cut.disparity, ' px')],
+      ['不透明像素', cut.area.toLocaleString()],
+      ['补回的无视差边缘', cut.recovered.toLocaleString()],
+      ['视差覆盖', percentage(cut.coverage)],
+    ]);
+    if (cut.coverage < 0.6) {
+      const hint = document.createElement('p');
+      hint.className = 'hint';
+      hint.textContent = '可信视差偏少：可先用「右眼校正」把两眼对齐，取出的边缘会更完整。';
+      $('cutout-readout').append(hint);
+    }
+    $('export-cutout').href = projectURL('export/object.png', { x, y });
+    $('export-cutout').hidden = false;
+  } catch (error) {
+    if (state.project === active && state.cutoutSerial === serial) {
+      $('cutout-readout').textContent = error.message;
+      $('export-cutout').hidden = true;
+    }
+  }
+}
+
+function pointChanged() {
+  if (state.mode === 'cutout') drawPreview();
+  if (!state.point) return;
+  void readPoint(state.point.x, state.point.y);
+  if (state.mode === 'cutout') void readCutout(state.point.x, state.point.y);
+}
+
 function setRowLink() {
   $('export-row').href = projectURL('export/row.csv', state.point ? { y: state.point.y } : {});
   $('export-row').textContent = state.point ? `下载第 ${state.point.y} 行 CSV` : '下载中间行 CSV';
@@ -147,7 +200,7 @@ function placePoint(rx, ry) {
   state.point = { x, y };
   drawPointer();
   setRowLink();
-  void readPoint(x, y);
+  pointChanged();
 }
 
 async function readOverlap(project) {
@@ -214,11 +267,16 @@ function refresh(project, keepView = false) {
   $('overlap-readout').textContent = '计算中…';
   $('metrics-readout').textContent = '打开视差图或点击计算。';
   $('point-readout').textContent = '点击左原片、视差图或可信区定位测量点。';
+  $('cutout-readout').textContent = '在左图上点一下要取出的纸艺。';
+  $('export-cutout').hidden = true;
   setRowLink();
   drawPreview();
   void readOverlap(project);
   if (['disparity', 'confidence'].includes(state.mode)) void readMetrics();
-  if (state.point) void readPoint(state.point.x, state.point.y);
+  if (state.point) {
+    void readPoint(state.point.x, state.point.y);
+    if (state.mode === 'cutout') void readCutout(state.point.x, state.point.y);
+  }
 }
 
 async function loadLibrary() {
@@ -284,6 +342,7 @@ $('modes').addEventListener('click', event => {
   state.mode = button.dataset.mode;
   drawPreview();
   if (['disparity', 'confidence'].includes(state.mode)) void readMetrics();
+  if (state.mode === 'cutout' && state.point) void readCutout(state.point.x, state.point.y);
 });
 $('analyze').addEventListener('click', () => void readMetrics());
 $('settings-form').addEventListener('submit', async event => {
