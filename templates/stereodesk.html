@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141a20">
+  <title>StereoDesk · 双目照片工作台</title>
+  <link rel="stylesheet" href="/static/stereodesk.css">
+  <script src="/static/stereodesk.js" defer></script>
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="/stereo/"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><span>StereoDesk <small>双目照片工作台</small></span></a>
+  <a class="utility-link" href="/prepare">图像准备 ↗</a>
+</header>
+<main class="layout">
+  <aside class="sidebar" aria-label="工程和处理设置">
+    <section class="card inputs">
+      <header><h1>照片对</h1><span id="source-kind"></span></header>
+      <label class="project-pick">打开工程<select id="project-list"><option value="">选择已保存工程</option></select></label>
+      <div id="demos" aria-label="合成演示"></div>
+      <details>
+        <summary>导入左右照片</summary>
+        <form id="upload-form">
+          <label>工程名称<input name="title" maxlength="80" value="未命名照片对" required></label>
+          <label>左眼照片<input name="left" type="file" accept="image/png,image/jpeg,image/webp,image/tiff" required></label>
+          <label>右眼照片<input name="right" type="file" accept="image/png,image/jpeg,image/webp,image/tiff" required></label>
+          <button type="submit" class="primary">导入照片对</button>
+        </form>
+      </details>
+      <details>
+        <summary>恢复工程 ZIP</summary>
+        <form id="restore-form">
+          <label>工程文件<input name="archive" type="file" accept=".zip,application/zip" required></label>
+          <button type="submit" class="primary">恢复为新工程</button>
+        </form>
+      </details>
+    </section>
+    <section id="controls" class="card controls" hidden>
+      <header><h2>处理设置</h2><span id="revision"></span></header>
+      <form id="settings-form">
+        <fieldset data-section="alignment">
+          <legend>右眼校正</legend>
+          <label>水平 <small>px</small><input name="dx" type="number" step="0.25" min="-256" max="256"></label>
+          <label>垂直 <small>px</small><input name="dy" type="number" step="0.25" min="-160" max="160"></label>
+          <label>旋转 <small>°</small><input name="angle" type="number" step="0.1" min="-20" max="20"></label>
+        </fieldset>
+        <details>
+          <summary>视差搜索</summary>
+          <fieldset data-section="matching">
+            <legend class="sr">视差搜索参数</legend>
+            <label>起点 <small>px</small><input name="minimum" type="number" step="1" min="-64" max="64"></label>
+            <label>跨度 <small>px</small><input name="span" type="number" step="16" min="16" max="128"></label>
+            <label>窗口<input name="window" type="number" step="2" min="3" max="11"></label>
+            <label>往返容差 <small>px</small><input name="tolerance" type="number" step="0.1" min="0.5" max="4"></label>
+            <label>最小纹理<input name="texture" type="number" step="0.1" min="0" max="30"></label>
+          </fieldset>
+        </details>
+        <details>
+          <summary>标距与会聚</summary>
+          <fieldset data-section="scale">
+            <legend class="sr">标距</legend>
+            <label>基线 <small>mm</small><input name="baseline_mm" type="number" step="0.1" min="0" max="2000"></label>
+            <label>焦距 <small>px</small><input name="focal_px" type="number" step="0.1" min="0" max="50000"></label>
+            <label>零点 <small>px</small><input name="zero_offset" type="number" step="0.1" min="-256" max="256"></label>
+          </fieldset>
+          <fieldset data-section="display">
+            <legend class="sr">预览</legend>
+            <label>红青会聚平移 <small>px</small><input name="convergence" type="number" step="0.25" min="-128" max="128"></label>
+            <label>辅助线高度 <small>0–1</small><input name="guide" type="number" step="0.01" min="0" max="1"></label>
+          </fieldset>
+        </details>
+        <button type="submit" class="primary">应用并保存</button>
+      </form>
+    </section>
+  </aside>
+  <div class="workspace">
+    <div id="message" class="message" role="status" aria-live="polite" hidden></div>
+    <section id="empty" class="empty">
+      <div class="lens-set" aria-hidden="true"><span></span><span></span></div>
+      <h2>检查双目照片的重合、视差与可用范围</h2>
+      <p>打开左侧的合成演示，或导入同尺寸的左右照片。</p>
+      <button id="quick-demo" type="button" class="primary">载入纸艺展台</button>
+    </section>
+    <section id="active" hidden>
+      <header class="work-title">
+        <div><h2 id="project-title"></h2><p id="project-detail"></p></div>
+        <a class="quiet-button" id="export-project" download>下载工程 ZIP</a>
+      </header>
+      <section class="viewer card" aria-label="图像预览">
+        <nav class="modes" id="modes" aria-label="预览类型">
+          <button type="button" data-mode="sources" aria-pressed="true">左右原片</button>
+          <button type="button" data-mode="guides" aria-pressed="false">对齐线</button>
+          <button type="button" data-mode="blend" aria-pressed="false">叠加</button>
+          <button type="button" data-mode="anaglyph" aria-pressed="false">红青</button>
+          <button type="button" data-mode="cross" aria-pressed="false">交叉观看</button>
+          <button type="button" data-mode="disparity" aria-pressed="false">视差</button>
+          <button type="button" data-mode="confidence" aria-pressed="false">可信区</button>
+        </nav>
+        <div id="view" class="view"></div>
+        <footer class="viewer-footer"><span id="view-note"></span><a id="export-preview" download>下载当前预览</a></footer>
+      </section>
+      <div class="readouts">
+        <section class="card readout">
+          <header><h3>共有图像</h3></header>
+          <dl id="overlap-readout"></dl>
+          <a id="export-aligned" class="quiet-button" download>下载共同裁切图 ZIP</a>
+        </section>
+        <section class="card readout">
+          <header><h3>视差检查</h3><button type="button" id="analyze" class="text-button">计算</button></header>
+          <div id="metrics-readout"></div>
+          <a id="export-disparity" class="quiet-button" download>下载原始视差 NPY</a>
+        </section>
+        <section class="card readout">
+          <header><h3>像素探针</h3></header>
+          <div id="point-readout">点击左原片、视差图或可信区定位测量点。</div>
+          <a id="export-row" class="quiet-button" download>下载当前行 CSV</a>
+        </section>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>
