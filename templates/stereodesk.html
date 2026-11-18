@@ -96,8 +96,16 @@
           <button type="button" data-mode="cross" aria-pressed="false">交叉观看</button>
           <button type="button" data-mode="disparity" aria-pressed="false">视差</button>
           <button type="button" data-mode="confidence" aria-pressed="false">可信区</button>
+          <button type="button" data-mode="profile" aria-pressed="false">距离剖面</button>
         </nav>
-        <div id="view" class="view"></div>
+        <div class="view-body">
+          <div id="view" class="view"></div>
+          <aside id="profile-panel" class="profile-panel" aria-label="沿线距离剖面" hidden>
+            <header><h3>距离剖面</h3></header>
+            <div id="profile-readout"></div>
+            <div id="profile-chart"></div>
+          </aside>
+        </div>
         <footer class="viewer-footer"><span id="view-note"></span><a id="export-preview" download>下载当前预览</a></footer>
       </section>
       <div class="readouts">

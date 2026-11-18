@@ -5,6 +5,7 @@ from .geometry import aligned_pair, guide_overlay, map_to_source, support_rectan
 from .imaging import (blend, cross_eye, diagnostic_preview, disparity_preview, load_image,
                       sample_report, simple_anaglyph, summary)
 from .matching import estimate
+from .profile import line_profile
 
 
 def cache_key(values):
@@ -73,6 +74,9 @@ class Workbench:
         report['x'] = x
         report['y'] = y
         return report
+
+    def profile(self, project, start, end):
+        return line_profile(self.match(project), project['settings'], start, end)
 
     def metrics(self, project):
         return {**summary(self.match(project)), **self.overlap(project)}

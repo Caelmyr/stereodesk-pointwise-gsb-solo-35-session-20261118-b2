@@ -1,6 +1,7 @@
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 import json
+import math
 
 from flask import Blueprint, jsonify, redirect, render_template, request, send_file
 
@@ -45,6 +46,22 @@ def int_query(key, minimum, maximum, fallback=None):
     if not minimum <= value <= maximum:
         raise Invalid('坐标超出当前图片')
     return value
+
+
+def point_query(key, axis):
+    raw = request.args.get(key)
+    if raw is None:
+        raise Invalid(f'请提供剖面线的{axis}')
+    parts = raw.split(',')
+    if len(parts) != 2:
+        raise Invalid(f'剖面线的{axis}需要 x, y 两个坐标')
+    try:
+        point = [float(value) for value in parts]
+    except ValueError as exc:
+        raise Invalid(f'剖面线的{axis}需要数字坐标') from exc
+    if not all(math.isfinite(value) for value in point):
+        raise Invalid(f'剖面线的{axis}需要有效坐标')
+    return point
 
 
 def register(app, root):
@@ -131,6 +148,17 @@ def register(app, root):
         x = int_query('x', 0, width - 1)
         y = int_query('y', 0, height - 1)
         return jsonify(desk.inspect(project, x, y))
+
+    @stereo.get('/projects/<identifier>/profile')
+    def profile(identifier):
+        project = current(identifier)
+        width, height = project['size']
+        start = point_query('start', '起点')
+        end = point_query('end', '终点')
+        for point in (start, end):
+            if not (0 <= point[0] < width and 0 <= point[1] < height):
+                raise Invalid('剖面线需要完全落在当前图片内')
+        return jsonify(desk.profile(project, start, end))
 
     @stereo.get('/projects/<identifier>/export/<kind>')
     def export(identifier, kind):
